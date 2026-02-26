@@ -68,6 +68,16 @@
             <artifactId>spring-boot-starter-test</artifactId>
             <scope>test</scope>
         </dependency>
+        <dependency>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-core</artifactId>
+<!--            Use the appropriate version for your Spring Boot project &ndash;&gt;-->
+        </dependency>
+        <dependency>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-lang3</artifactId>
+<!--            <version>3.12.0</version>-->
+        </dependency>
     </dependencies>
 
     <build>
