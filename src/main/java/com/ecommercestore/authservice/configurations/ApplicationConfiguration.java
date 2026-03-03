@@ -22,4 +22,9 @@ public class ApplicationConfiguration {
     public BCryptPasswordEncoder getBcryptPasswordEncoder() {
         return new BCryptPasswordEncoder();
     }
+
+    @Bean
+    public String getEncodedKey(@Value("${passedEncodedKey}") String encodedKey) {
+        return encodedKey;
+    };
 }

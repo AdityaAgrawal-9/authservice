@@ -10,7 +10,9 @@ import com.ecommercestore.authservice.models.SessionStatus;
 import com.ecommercestore.authservice.models.User;
 import com.ecommercestore.authservice.repositories.SessionRepository;
 import com.ecommercestore.authservice.repositories.UserRepository;
+import io.jsonwebtoken.Jwts;
 import org.apache.commons.lang3.RandomStringUtils;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
@@ -18,9 +20,13 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 
+import javax.crypto.SecretKey;
+import javax.crypto.spec.SecretKeySpec;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.util.Base64;
 import java.util.Date;
 import java.util.List;
 import java.util.Optional;
@@ -30,13 +36,16 @@ public class localAuthService implements IAuthService {
     private UserRepository userRepository;
     private BCryptPasswordEncoder bCryptPasswordEncoder;
     private SessionRepository sessionRepository;
+    private final String encodedKey;
 
     public localAuthService(UserRepository userRepository,
                             BCryptPasswordEncoder bCryptPasswordEncoder,
-                            SessionRepository sessionRepository) {
+                            SessionRepository sessionRepository,
+                            String encodedKey) {
         this.userRepository = userRepository;
         this.bCryptPasswordEncoder = bCryptPasswordEncoder;
         this.sessionRepository = sessionRepository;
+        this.encodedKey = encodedKey;
     }
 
     @Override
@@ -53,10 +62,40 @@ public class localAuthService implements IAuthService {
         Session session = new Session();
         session.setUser(user.get());
         session.setSessionStatus(SessionStatus.ACTIVE);
-        String token = RandomStringUtils.randomAscii(20);
+
+//        /*Creating a Random 20 character String JWT*/
+//        String token = RandomStringUtils.randomAscii(20);
+
+//        Creating a SecretKey to Sign the JWT
+//        You can either create it like this but then you will have to store it somewhere to be able to
+//        validate later.
+//        SecretKey secretKey = Jwts.SIG.HS256.key().build();
+
+//        ******* Important Note -
+//        Currently using a hardcoded SHA256 compatible encoded key as a secret
+//        which is being passed from the application.properties file.
+//        It should be passed from the Environment Variables to the application.properties file.
+//        This is as good as below.
+//        String encodedKey = "h1w8ZbXrj6JFcmnPuNjaouOSVZz5wIsmj8OMa/WpO6c=";
+
+        byte[] rawKey = Base64.getDecoder().decode(encodedKey);
+        SecretKey secretKey = new SecretKeySpec(rawKey, 0, rawKey.length, "HmacSHA256");
+
+        /* Creating a Signed JWT*/
+        String token = Jwts.builder()
+                .claim("Id", user.get().getId())
+                .claim("User Name", user.get().getName())
+                .claim("e-mail", user.get().getEmail())
+                .issuer("Auth Service e-commerce Store")
+                .expiration(Date.from(LocalDateTime.now()
+                                        .plusDays(15)
+                                        .atZone(ZoneId.systemDefault())
+                                        .toInstant()))
+                .signWith(secretKey)
+                .compact();
+
         session.setSessionToken(token);
         session.setExpiringAt(LocalDateTime.now().plusDays(15));
-//        session.setSessionStatus(SessionStatus.ACTIVE);
         sessionRepository.save(session);
         UserDto userDto = UserDto.fromUser(user.get());
         MultiValueMap<String, String> headers = new LinkedMultiValueMap<>();
@@ -145,4 +184,5 @@ public class localAuthService implements IAuthService {
 
         return new ResponseEntity<>(validateResponseDto, HttpStatus.OK);
     }
+
 }
