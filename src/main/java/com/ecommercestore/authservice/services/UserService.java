@@ -1,9 +1,13 @@
 package com.ecommercestore.authservice.services;
 
+import com.ecommercestore.authservice.dtos.SendEmailDto;
 import com.ecommercestore.authservice.dtos.SignupUserRequestDto;
 import com.ecommercestore.authservice.dtos.SignupUserResponseDto;
 import com.ecommercestore.authservice.models.User;
 import com.ecommercestore.authservice.repositories.UserRepository;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 
@@ -13,10 +17,17 @@ import java.util.Optional;
 public class UserService implements IUserService {
     private UserRepository userRepository;
     private BCryptPasswordEncoder bCryptPasswordEncoder;
+    private KafkaTemplate<String, String> kafkaTemplate;
 
-    public UserService(UserRepository userRepository, BCryptPasswordEncoder bCryptPasswordEncoder) {
+    @Autowired
+    private ObjectMapper objectMapper;
+
+    public UserService(UserRepository userRepository,
+                       BCryptPasswordEncoder bCryptPasswordEncoder,
+                       KafkaTemplate<String, String> kafkaTemplate) {
         this.userRepository = userRepository;
         this.bCryptPasswordEncoder = bCryptPasswordEncoder;
+        this.kafkaTemplate = kafkaTemplate;
     }
 
     @Override
@@ -24,6 +35,33 @@ public class UserService implements IUserService {
         User passedUser = signupUserRequestDto.toUser();
         passedUser.setPassword(bCryptPasswordEncoder.encode(passedUser.getPassword()));
         User createdUser = userRepository.save(passedUser);
+
+        if(createdUser != null) {
+            SendEmailDto sendEmailDto = new SendEmailDto();
+//          Set the System FROM Email in the environment variable and fetch. Never HardCode username and passwords.
+            sendEmailDto.setFrom(System.getenv("USER_NAME"));
+            sendEmailDto.setTo(createdUser.getEmail());
+            sendEmailDto.setSubject("User Signup Successful.");
+            sendEmailDto.setBody("Hi " + createdUser.getName() + ",\n\n"+
+                    "Welcome to the E-Commerce Store! \n" +
+                    "You have been registered Successfuly.\n" +
+                    "You can login and start buying available products now.\n" +
+                    "Thank You & Happy Shopping !!!\n\n" +
+                    "Regards,\n" +
+                    "Aditya's E-Commerce Store\n.");
+
+
+            try {
+                kafkaTemplate.send(
+                        "notification.send.email",
+                        objectMapper.writeValueAsString(sendEmailDto)
+                );
+            }catch(Exception e){
+                System.out.println("Error in sending email");
+            }
+
+        }
+
         return Optional.of(SignupUserResponseDto.fromUser(createdUser));
     }
 
